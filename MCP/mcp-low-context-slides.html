@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keeping MCPs Low-Context</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #21262d;
+    --teal:      #00d9a6;
+    --teal-dim:  #00996e;
+    --amber:     #e6a817;
+    --red:       #f85149;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --code-bg:   #0a0f14;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── Slideshow shell ── */
+  .deck {
+    width: 100%; height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 80px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    text-align: left;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── Nav ── */
+  .nav {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+  }
+  .nav-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .nav-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .nav-counter {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 56px;
+    text-align: center;
+  }
+
+  /* ── Progress bar ── */
+  .progress {
+    position: fixed;
+    top: 0; left: 0;
+    height: 2px;
+    background: var(--teal);
+    transition: width 0.35s ease;
+    z-index: 100;
+  }
+
+  /* ── Dot indicator ── */
+  .dots {
+    position: fixed;
+    top: 18px;
+    right: 28px;
+    display: flex;
+    gap: 6px;
+    z-index: 100;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .dot.active { background: var(--teal); }
+
+  /* ── Shared layout helpers ── */
+  .slide-inner {
+    max-width: 960px;
+    width: 100%;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--teal);
+  }
+
+  h2 {
+    font-size: clamp(22px, 3vw, 36px);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+
+  .subtitle {
+    font-size: 18px;
+    color: var(--muted);
+    margin-top: 20px;
+    line-height: 1.6;
+    max-width: 620px;
+  }
+
+  p {
+    font-size: 16px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 14px;
+  }
+
+  /* ── Context meter (title slide signature) ── */
+  .ctx-meter {
+    margin-top: 44px;
+    width: 100%;
+    max-width: 560px;
+  }
+  .ctx-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ctx-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .ctx-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--red) 0%, var(--amber) 60%, var(--red) 100%);
+    background-size: 200% 100%;
+    animation: fill-pulse 2.4s ease-in-out infinite, shrink-fill 8s ease forwards;
+    width: 94%;
+  }
+  @keyframes fill-pulse {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @keyframes shrink-fill {
+    0%   { width: 94%; }
+    100% { width: 18%; }
+  }
+
+  /* ── Pattern slides layout ── */
+  .pattern-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 28px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--teal-dim); }
+  .card-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--teal);
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .card-body {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── Detail slide layout ── */
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 28px;
+    align-items: start;
+  }
+  .detail-left { }
+  .detail-right { }
+
+  .steps {
+    list-style: none;
+    counter-reset: step-counter;
+  }
+  .steps li {
+    counter-increment: step-counter;
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .steps li::before {
+    content: counter(step-counter);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--teal);
+    background: rgba(0,217,166,0.08);
+    border: 1px solid rgba(0,217,166,0.2);
+    border-radius: 4px;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #a8d8b0;
+    line-height: 1.7;
+    overflow: auto;
+    max-height: 240px;
+  }
+  .code-block .cm  { color: var(--muted); }
+  .code-block .kw  { color: #d2a8ff; }
+  .code-block .str { color: #a5d6ff; }
+  .code-block .fn  { color: var(--teal); }
+  .code-block .num { color: var(--amber); }
+
+  /* ── Tradeoff table ── */
+  .tradeoff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .tradeoff-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .tradeoff-col.pro { border-top: 2px solid var(--teal); }
+  .tradeoff-col.con { border-top: 2px solid var(--amber); }
+  .tradeoff-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .tradeoff-col.pro .tradeoff-label { color: var(--teal); }
+  .tradeoff-col.con .tradeoff-label { color: var(--amber); }
+  .tradeoff-item {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: 8px;
+    padding-left: 14px;
+    position: relative;
+  }
+  .tradeoff-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+  }
+  .tradeoff-col.pro .tradeoff-item::before { background: var(--teal); }
+  .tradeoff-col.con .tradeoff-item::before { background: var(--amber); }
+
+  /* ── Checklist (final slide) ── */
+  .checklist {
+    list-style: none;
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 32px;
+  }
+  .checklist li {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .check-icon {
+    width: 18px; height: 18px;
+    background: rgba(0,217,166,0.1);
+    border: 1px solid var(--teal-dim);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .check-icon svg { width: 10px; height: 10px; stroke: var(--teal); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Tag pill ── */
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-right: 6px;
+    margin-bottom: 18px;
+  }
+  .pill.highlight { border-color: var(--teal-dim); color: var(--teal); background: rgba(0,217,166,0.06); }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  /* ── Safety slide ── */
+  .warning-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-top: 28px;
+  }
+  .warn-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--red);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .warn-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--red);
+    margin-bottom: 8px;
+    font-family: var(--mono);
+  }
+  .warn-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<div class="dots" id="dots"></div>
+
+<div class="deck" id="deck">
+
+  <!-- ─── SLIDE 0: Title ─── -->
+  <div class="slide active" id="slide-0">
+    <div class="slide-inner">
+      <div class="eyebrow">Engineering Reference · MCP Architecture</div>
+      <h1>Keeping MCPs<br><em>Low-Context</em></h1>
+      <p class="subtitle">Five architectural patterns to prevent tool-manifest bloat from overwhelming your agent's context window — without sacrificing capability.</p>
+      <div class="ctx-meter">
+        <div class="ctx-label">
+          <span>context window usage</span>
+          <span id="ctx-pct">94%</span>
+        </div>
+        <div class="ctx-track">
+          <div class="ctx-fill" id="ctx-fill"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 1: The Problem ─── -->
+  <div class="slide" id="slide-1">
+    <div class="slide-inner">
+      <div class="eyebrow">The Problem</div>
+      <h2>Naive MCP Integration Scales Badly</h2>
+      <div class="detail-layout" style="grid-template-columns: 1.1fr 0.9fr;">
+        <div>
+          <p>As tool catalogs grow, the default approach — inject every registered MCP server manifest on every turn — creates a compounding cost problem.</p>
+          <p>Each manifest costs hundreds of tokens. 30 tools × 300 tokens = 9,000 tokens before the user says anything. At 100 tools, you're burning most of a context window on plumbing.</p>
+          <p>The result: slower responses, confused routing, higher cost, and a hard ceiling on how many capabilities you can register.</p>
+        </div>
+        <div>
+          <div class="code-block">
+<span class="cm"># What naive loading looks like</span>
+<span class="cm"># on every single turn:</span>
+
+tools = [
+  <span class="str">"create_user"</span>,       <span class="cm"># 280 tok</span>
+  <span class="str">"delete_user"</span>,       <span class="cm"># 260 tok</span>
+  <span class="str">"list_tenants"</span>,      <span class="cm"># 310 tok</span>
+  <span class="str">"query_metrics"</span>,     <span class="cm"># 340 tok</span>
+  <span class="str">"run_playwright"</span>,    <span class="cm"># 890 tok</span>
+  <span class="str">"fetch_figma_doc"</span>,   <span class="cm"># 720 tok</span>
+  <span class="str">"search_confluence"</span>, <span class="cm"># 480 tok</span>
+  <span class="cm"># ... 23 more ...</span>
+]
+
+<span class="cm"># Total before turn 1: ~8,400 tokens</span>
+<span class="cm"># Relevant tools used: 1–2</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 2: Overview of 5 patterns ─── -->
+  <div class="slide" id="slide-2">
+    <div class="slide-inner">
+      <div class="eyebrow">Five Patterns</div>
+      <h2>A Layered Defense Against Context Bloat</h2>
+      <div class="pattern-grid">
+        <div class="card">
+          <div class="card-num">PATTERN 01</div>
+          <div class="card-title">Expose Minimal Surface</div>
+          <div class="card-body">Split large MCP servers into small, semantically cohesive units. ≤4 servers per software component.</div>
+        </div>
+        <div class="card">
+          <div class="card-num">PATTERN 02</div>
+          <div class="card-title">Lazy Tool Loading</div>
+          <div class="card-body">Inject a single ToolSearch tool on turn 1. Manifests enter context only when the agent explicitly requests them.</div>
+        </div>
+        <div class="card">
+          <div class="card-num">PATTERN 03</div>
+          <div class="card-title">Semantic Router / Registry</div>
+          <div class="card-body">Back discovery with a vector index. Route queries to the top-k most relevant tools — not everything registered.</div>
+        </div>
+        <div class="card">
+          <div class="card-num">PATTERN 04</div>
+          <div class="card-title">Higher-Level Abstractions</div>
+          <div class="card-body">Replace clusters of fine-grained tools with Skills, CLI bridges, or Subagents that encapsulate the complexity.</div>
+        </div>
+        <div class="card" style="grid-column: 1 / -1; max-width: 460px;">
+          <div class="card-num">PATTERN 05</div>
+          <div class="card-title">Per-Session Tool Sets</div>
+          <div class="card-body">Maintain multiple <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">mcp.*.json</code> configs and select the right one per project. Zero irrelevant tools in context.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 3: Pattern 1 ─── -->
+  <div class="slide" id="slide-3">
+    <div class="slide-inner">
+      <div class="eyebrow">Pattern 01 · Minimal Surface</div>
+      <h2>Split Large MCP Servers</h2>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <p style="margin-bottom:20px;">A single server with 40 tools injects all 40 on every turn. Break it apart by semantic domain — each server owns exactly one capability area.</p>
+          <ol class="steps">
+            <li>Audit your MCP server and list all exposed tools.</li>
+            <li>Group by the noun they operate on or the workflow they belong to.</li>
+            <li>Create a separate server binary per group (≤4 per component).</li>
+            <li>Update client configs to reference the new servers.</li>
+            <li>Smoke-test: each server only exposes tools from its domain.</li>
+          </ol>
+          <div class="tradeoff">
+            <div class="tradeoff-col pro">
+              <div class="tradeoff-label">Pros</div>
+              <div class="tradeoff-item">Each turn loads only the relevant server</div>
+              <div class="tradeoff-item">Easier to version independently</div>
+            </div>
+            <div class="tradeoff-col con">
+              <div class="tradeoff-label">Cons</div>
+              <div class="tradeoff-item">More processes to deploy and monitor</div>
+              <div class="tradeoff-item">Initial refactor effort required</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="code-block">
+<span class="cm"># Before — one big server</span>
+apim-mcp
+  ├── create_tenant
+  ├── delete_tenant
+  ├── list_apis
+  ├── query_metrics
+  ├── get_logs
+  └── manage_subscription
+
+<span class="cm"># After — split by domain</span>
+apim-admin-mcp
+  ├── create_tenant
+  └── delete_tenant
+
+apim-analytics-mcp
+  ├── query_metrics
+  └── get_logs
+
+apim-dev-portal-mcp
+  ├── list_apis
+  └── manage_subscription</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 4: Pattern 2 ─── -->
+  <div class="slide" id="slide-4">
+    <div class="slide-inner">
+      <div class="eyebrow">Pattern 02 · Lazy Loading</div>
+      <h2>Deferred Tool Discovery</h2>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <p style="margin-bottom:20px;">Start with zero tool manifests in context. Give the agent one tool: <code style="font-family:var(--mono);font-size:13px;color:var(--teal)">tool_search(query)</code>. It fetches manifests on demand, injected only for the next turn.</p>
+          <ol class="steps">
+            <li>Implement a <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">tool_search</code> MCP tool that accepts a natural language query.</li>
+            <li>Wire it to a searchable index (see Pattern 03).</li>
+            <li>Remove all other tools from initial context injection.</li>
+            <li>Add a system prompt instruction to call <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">tool_search</code> before any other tool.</li>
+            <li>On the next turn, inject only the returned manifests.</li>
+          </ol>
+          <div class="tradeoff">
+            <div class="tradeoff-col pro">
+              <div class="tradeoff-label">Pros</div>
+              <div class="tradeoff-item">Near-zero manifest cost on turn 1</div>
+              <div class="tradeoff-item">Scales to hundreds of tools</div>
+            </div>
+            <div class="tradeoff-col con">
+              <div class="tradeoff-label">Cons</div>
+              <div class="tradeoff-item">One extra round-trip before first tool use</div>
+              <div class="tradeoff-item">Discovery accuracy depends on index quality</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="code-block">
+<span class="cm"># System prompt snippet</span>
+<span class="str">"""
+You have exactly ONE tool available: tool_search.
+
+Before calling any capability, call tool_search
+with a description of what you need.
+The relevant tools will be available next turn.
+
+tool_search("list active API subscribers")
+"""</span>
+
+<span class="cm"># Agent turn sequence</span>
+Turn 1: agent → <span class="fn">tool_search</span>(<span class="str">"list subscribers"</span>)
+        returns: [list_subscriptions schema]
+
+Turn 2: agent → <span class="fn">list_subscriptions</span>(
+          filter=<span class="str">"active"</span>
+        )</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 5: Pattern 3 ─── -->
+  <div class="slide" id="slide-5">
+    <div class="slide-inner">
+      <div class="eyebrow">Pattern 03 · Semantic Router</div>
+      <h2>Vector-Backed Tool Registry</h2>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <p style="margin-bottom:20px;">Keyword search is brittle. Embed each tool's description and run cosine similarity search at query time. Return only the top-k manifests.</p>
+          <ol class="steps">
+            <li>Write a rich natural-language description for each tool.</li>
+            <li>Embed all descriptions (e.g., <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">nomic-embed-text</code> via Ollama).</li>
+            <li>Store embeddings in pgvector (already in stack).</li>
+            <li>Expose <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">discover_tools(query, k=5)</code> as the entry-point tool.</li>
+            <li>Tune <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">k</code> — start at 5, raise if agent needs follow-up discovery calls.</li>
+          </ol>
+          <div class="tradeoff">
+            <div class="tradeoff-col pro">
+              <div class="tradeoff-label">Pros</div>
+              <div class="tradeoff-item">Handles paraphrasing and synonyms</div>
+              <div class="tradeoff-item">Single interface, easily versioned</div>
+            </div>
+            <div class="tradeoff-col con">
+              <div class="tradeoff-label">Cons</div>
+              <div class="tradeoff-item">All tools must be indexed before use</div>
+              <div class="tradeoff-item">Needs vector infra (pgvector + Ollama)</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="code-block">
+<span class="kw">def</span> <span class="fn">discover_tools</span>(
+    query: <span class="fn">str</span>,
+    k: <span class="fn">int</span> = <span class="num">5</span>
+) -> <span class="fn">list</span>[ToolSchema]:
+
+    <span class="cm"># Embed the incoming query</span>
+    embedding = <span class="fn">embed</span>(
+        query,
+        model=<span class="str">"nomic-embed-text"</span>
+    )
+
+    <span class="cm"># Cosine similarity search in pgvector</span>
+    results = pgvector.<span class="fn">search</span>(
+        embedding,
+        k=k,
+        table=<span class="str">"tool_registry"</span>
+    )
+
+    <span class="cm"># Return only the matched schemas</span>
+    <span class="kw">return</span> [
+        <span class="fn">load_schema</span>(r.tool_id)
+        <span class="kw">for</span> r <span class="kw">in</span> results
+    ]</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 6: Pattern 4 ─── -->
+  <div class="slide" id="slide-6">
+    <div class="slide-inner">
+      <div class="eyebrow">Pattern 04 · Higher-Level Abstractions</div>
+      <h2>Skills, CLI Bridges &amp; Subagents</h2>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <p style="margin-bottom:20px;">Replace clusters of fine-grained tools with a single higher-level interface. Three implementation flavors:</p>
+          <div style="margin-bottom:16px;">
+            <span class="pill highlight">Skills</span>
+            <span style="font-size:13px;color:var(--muted);">Orchestrate 3–5 tools server-side. Expose as one MCP tool with structured I/O.</span>
+          </div>
+          <div style="margin-bottom:16px;">
+            <span class="pill highlight">CLI Bridge</span>
+            <span style="font-size:13px;color:var(--muted);">Wrap toolset in a CLI. Expose a single <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">run_cli(command)</code> tool. Agent discovers capabilities via <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">--help</code>.</span>
+          </div>
+          <div style="margin-bottom:16px;">
+            <span class="pill highlight">Subagents</span>
+            <span style="font-size:13px;color:var(--muted);">Heavy MCPs (Playwright, Figma) go inside a child agent. Parent delegates via a single <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">delegate_to_X(task)</code> tool.</span>
+          </div>
+          <div class="tradeoff" style="margin-top:8px;">
+            <div class="tradeoff-col pro">
+              <div class="tradeoff-label">Pros</div>
+              <div class="tradeoff-item">Parent never sees heavy manifests</div>
+              <div class="tradeoff-item">Subagents run pre-warmed contexts</div>
+            </div>
+            <div class="tradeoff-col con">
+              <div class="tradeoff-label">Cons</div>
+              <div class="tradeoff-item">CLI execution has security risk</div>
+              <div class="tradeoff-item">Subagents add orchestration complexity</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="code-block">
+<span class="cm"># Instead of 5 tools for user onboarding:</span>
+<span class="cm"># create_user, assign_role, send_email,</span>
+<span class="cm"># provision_tenant, log_audit_event</span>
+
+<span class="cm"># Expose one skill:</span>
+<span class="fn">onboard_user</span>(
+    name: <span class="fn">str</span>,
+    email: <span class="fn">str</span>,
+    role: <span class="fn">str</span>,
+    tenant_id: <span class="fn">str</span>
+) -> OnboardResult
+
+<span class="cm"># Or one CLI bridge:</span>
+<span class="fn">run_cli</span>(<span class="str">"apim user onboard \
+  --name 'Kristen S' \
+  --role admin \
+  --tenant acme"</span>)
+
+<span class="cm"># Or delegate to a subagent:</span>
+<span class="fn">delegate_to_portal_agent</span>(
+    task=<span class="str">"Onboard Kristen as admin \
+    in the ACME tenant"</span>
+)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 7: Pattern 5 ─── -->
+  <div class="slide" id="slide-7">
+    <div class="slide-inner">
+      <div class="eyebrow">Pattern 05 · Project Scoping</div>
+      <h2>Per-Session Tool Sets</h2>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <p style="margin-bottom:20px;">A single global <code style="font-family:var(--mono);font-size:13px;color:var(--teal)">mcp.json</code> means a developer debugging an integration also has Playwright, Figma, and DB admin tools in context. Irrelevant noise — and attack surface.</p>
+          <ol class="steps">
+            <li>Create a base config with discovery-only tools.</li>
+            <li>Create scoped configs per project or engagement.</li>
+            <li>Pass the config at session start: <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">--mcp-config mcp.apim.json</code></li>
+            <li>Document which config maps to which project in the team wiki.</li>
+            <li>Review and prune configs quarterly as tools change.</li>
+          </ol>
+          <div class="tradeoff">
+            <div class="tradeoff-col pro">
+              <div class="tradeoff-label">Pros</div>
+              <div class="tradeoff-item">Zero irrelevant tools per session</div>
+              <div class="tradeoff-item">Easy to audit agent access per task</div>
+            </div>
+            <div class="tradeoff-col con">
+              <div class="tradeoff-label">Cons</div>
+              <div class="tradeoff-item">Requires discipline to pick right config</div>
+              <div class="tradeoff-item">Configs can drift from server state</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="code-block">
+<span class="cm"># .claude/ directory layout</span>
+.claude/
+  mcp.default.json     <span class="cm">← discovery + utils</span>
+  mcp.apim.json        <span class="cm">← APIM admin tools</span>
+  mcp.analytics.json   <span class="cm">← metrics + logs</span>
+  mcp.infra.json       <span class="cm">← Docker/SSH/systemd</span>
+  mcp.acme.json        <span class="cm">← ACME engagement</span>
+
+<span class="cm"># Launch with scoped config</span>
+claude <span class="str">--mcp-config</span> .claude/mcp.apim.json
+
+<span class="cm"># Or set per-project in project config</span>
+<span class="cm"># .claude/settings.json:</span>
+{
+  <span class="str">"mcpConfig"</span>: <span class="str">".claude/mcp.apim.json"</span>
+}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 8: Safety ─── -->
+  <div class="slide" id="slide-8">
+    <div class="slide-inner">
+      <div class="eyebrow">Safety & Security</div>
+      <h2>These Patterns Increase Power. Guard It.</h2>
+      <p style="max-width:680px;">Low-context patterns often introduce execution interfaces that, if misconfigured, carry serious risk. Three things to get right before shipping.</p>
+      <div class="warning-grid">
+        <div class="warn-card">
+          <div class="warn-card-title">CLI / Execute Gateway</div>
+          <div class="warn-card-body">A <code style="font-family:var(--mono);font-size:12px;">run_cli</code> tool running as your user can perform destructive operations. Run CLI bridges as a dedicated low-privilege service account. Allowlist permitted commands. Log every invocation with prompt context.</div>
+        </div>
+        <div class="warn-card">
+          <div class="warn-card-title">Sandbox Choice</div>
+          <div class="warn-card-body">If using a code-mode executor, choose carefully. <code style="font-family:var(--mono);font-size:12px;">quickjs-emscripten</code> is safer for adversarial inputs — fewer known escape paths. Avoid <code style="font-family:var(--mono);font-size:12px;">RestrictedPython</code> for any untrusted content.</div>
+        </div>
+        <div class="warn-card">
+          <div class="warn-card-title">Prompt Injection via Results</div>
+          <div class="warn-card-body">Tool results containing attacker-controlled text can hijack routing. Strip or escape all result content before it re-enters the agent loop as context. Treat tool results as untrusted data.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SLIDE 9: Checklist ─── -->
+  <div class="slide" id="slide-9">
+    <div class="slide-inner">
+      <div class="eyebrow">Summary</div>
+      <h2>Implementation Checklist</h2>
+      <p>Work through these in order — each layer reinforces the next.</p>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Split large MCP servers into ≤4 semantic units per component
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Add a <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">tool_search</code> gateway; remove upfront manifest injection
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Back the registry with pgvector + <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">nomic-embed-text</code>
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Replace fine-grained clusters with Skills, CLI bridges, or Subagents
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Create per-project <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">mcp.*.json</code> files; document which maps to what
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Restrict CLI/execute tools to a least-privilege service account
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Choose <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">quickjs-emscripten</code> over RestrictedPython for code-mode sandbox
+        </li>
+        <li>
+          <span class="check-icon"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+          Sanitize all tool results before they re-enter the agent loop
+        </li>
+      </ul>
+      <div style="margin-top:36px; padding-top:24px; border-top:1px solid var(--border); display:flex; gap:24px; align-items:center;">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted);">Field Engineering Reference · June 2026</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--teal);">mcp-low-context-how-to.md</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<div class="nav">
+  <button class="nav-btn" id="prev-btn" onclick="go(-1)" disabled>← prev</button>
+  <span class="nav-counter" id="counter">1 / 10</span>
+  <button class="nav-btn" id="next-btn" onclick="go(1)">next →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  const dotEls = [];
+
+  // Build dots
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+    dotEls.push(d);
+  }
+
+  function goTo(n) {
+    slides[cur].classList.remove('active');
+    dotEls[cur].classList.remove('active');
+    cur = Math.max(0, Math.min(total - 1, n));
+    slides[cur].classList.add('active');
+    dotEls[cur].classList.add('active');
+    document.getElementById('counter').textContent = `${cur + 1} / ${total}`;
+    document.getElementById('progress').style.width = `${((cur + 1) / total) * 100}%`;
+    document.getElementById('prev-btn').disabled = cur === 0;
+    document.getElementById('next-btn').disabled = cur === total - 1;
+
+    // Animate context meter pct label on title slide
+    if (cur === 0) {
+      const fill = document.getElementById('ctx-fill');
+      fill.style.animation = 'none';
+      void fill.offsetWidth;
+      fill.style.animation = 'fill-pulse 2.4s ease-in-out infinite, shrink-fill 8s ease forwards';
+    }
+  }
+
+  function go(dir) { goTo(cur + dir); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); go(1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); go(-1); }
+  });
+
+  // Init progress bar
+  document.getElementById('progress').style.width = `${(1 / total) * 100}%`;
+</script>
+</body>
+</html>
