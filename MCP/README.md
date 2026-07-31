@@ -7,6 +7,11 @@
 
 As MCP tool catalogs grow, naive approaches flood the model's context window with hundreds of tool manifests on every turn. This guide covers eight architectural patterns to keep that footprint small, deterministic, safe, and fast. Patterns 1–5 are context-reduction patterns; patterns 6–8 cover routing hygiene, result hygiene, and guardrails for a **federated proxy** that fronts external MCP servers. Each section describes the problem, the solution, implementation steps, and tradeoffs.
 
+## MCP Specifications
+- [Stateless Specification - 2026-07-28](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [One Year Old - 2025-11](https://blog.modelcontextprotocol.io/posts/2025-11-25-first-mcp-anniversary/)
+- [Introducting the Model Context Protocol - 2024-11-25](https://www.anthropic.com/news/model-context-protocol)
+- [GitHub Repository](https://github.com/modelcontextprotocol)
 ---
 
 ## Pattern 1: Expose Minimal Surface (Split Large MCP Servers)
