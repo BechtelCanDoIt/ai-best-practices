@@ -14,6 +14,10 @@ As MCP tool catalogs grow, naive approaches flood the model's context window wit
 - [GitHub Repository](https://github.com/modelcontextprotocol)
 ---
 
+## Why These Patterns Are Important
+As inspired by [Mhalter3378](https://www.reddit.com/r/LLM/comments/1vgfbxy/me_explaining_to_my_coworker_why_their_300k/), this is what an LLM sees when you enable every MCP server you can find.
+![All the menu bars from the early 90s](https://preview.redd.it/me-explaining-to-my-coworker-why-their-300k-context-window-v0-melrdc70llhh1.png?auto=webp&s=e46255cb990e1d26a8e36ef8eb948e448cb9004d)
+
 ## Pattern 1: Expose Minimal Surface (Split Large MCP Servers)
 
 ### Problem
