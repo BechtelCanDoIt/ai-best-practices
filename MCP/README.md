@@ -9,6 +9,7 @@ As MCP tool catalogs grow, naive approaches flood the model's context window wit
 
 ## MCP Specifications
 - [Stateless Specification - 2026-07-28](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [MCP 2026 Changes](https://www.linkedin.com/pulse/mcp-2026-changes-rules-sessions-optional-extensions-granados--jfbpe/)
 - [One Year Old - 2025-11](https://blog.modelcontextprotocol.io/posts/2025-11-25-first-mcp-anniversary/)
 - [Introducting the Model Context Protocol - 2024-11-25](https://www.anthropic.com/news/model-context-protocol)
 - [GitHub Repository](https://github.com/modelcontextprotocol)
