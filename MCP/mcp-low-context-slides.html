@@ -768,20 +768,16 @@ Turn 2: agent → <span class="fn">list_subscriptions</span>(
           <div class="code-block">
 <span class="cm"># .claude/ directory layout</span>
 .claude/
-  mcp.default.json     <span class="cm">← discovery + utils</span>
-  mcp.apim.json        <span class="cm">← APIM admin tools</span>
-  mcp.analytics.json   <span class="cm">← metrics + logs</span>
-  mcp.infra.json       <span class="cm">← Docker/SSH/systemd</span>
-  mcp.acme.json        <span class="cm">← ACME engagement</span>
+  settings.json        <span class="cm">← mcpServers: discovery + utils</span>
+  mcp.apim.json         <span class="cm">← APIM admin tools</span>
+  mcp.analytics.json    <span class="cm">← metrics + logs</span>
+  mcp.infra.json        <span class="cm">← Docker/SSH/systemd</span>
 
 <span class="cm"># Launch with scoped config</span>
 claude <span class="str">--mcp-config</span> .claude/mcp.apim.json
 
-<span class="cm"># Or set per-project in project config</span>
-<span class="cm"># .claude/settings.json:</span>
-{
-  <span class="str">"mcpConfig"</span>: <span class="str">".claude/mcp.apim.json"</span>
-}</div>
+<span class="cm"># Or set the mcpServers object directly</span>
+<span class="cm"># in .claude/settings.json for the project</span></div>
         </div>
       </div>
     </div>
@@ -851,7 +847,7 @@ claude <span class="str">--mcp-config</span> .claude/mcp.apim.json
         </li>
       </ul>
       <div style="margin-top:36px; padding-top:24px; border-top:1px solid var(--border); display:flex; gap:24px; align-items:center;">
-        <span style="font-family:var(--mono);font-size:11px;color:var(--muted);">Field Engineering Reference · June 2026</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted);">Field Engineering Reference · June 2026 · Patterns 1–5 excerpt — see MCP/README.md for the full guide (Patterns 1–8 + Safety Notes)</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--teal);">mcp-low-context-how-to.md</span>
       </div>
     </div>

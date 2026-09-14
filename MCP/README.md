@@ -101,7 +101,7 @@ Build a **tool registry** backed by a semantic graph or vector index. The router
 ### How to Implement
 
 1. For each tool, write a rich natural-language description and embed it (e.g., using `nomic-embed-text` via Ollama).
-2. Store embeddings in a vector store (pgvector is already available in your stack).
+2. Store embeddings in a vector store (e.g., pgvector, if your org already runs one).
 3. Expose a `discover_tools(query, k=5)` endpoint that performs cosine similarity search and returns the top-k tool schemas.
 4. Wire this endpoint as the single entry-point tool in the model's initial context.
 5. Tune `k` — start at 5, raise if the agent frequently needs follow-up discovery calls.
@@ -120,7 +120,7 @@ def discover_tools(query: str, k: int = 5) -> list[ToolSchema]:
 |-----|-----|
 | Scales to 100+ tools with low context cost | Embedding quality determines routing accuracy |
 | Semantic matching handles paraphrasing and synonyms | Cold-start: all tools must be indexed before use |
-| Single discovery interface, easily versioned | Needs vector infrastructure (already available: pgvector + Ollama) |
+| Single discovery interface, easily versioned | Needs vector infrastructure (e.g., pgvector + an embedding model) |
 
 ---
 
@@ -134,7 +134,7 @@ Fine-grained tools (one per API endpoint, one per file operation) explode manife
 
 Replace clusters of fine-grained tools with **higher-level abstractions**:
 
-- **Skills** — encapsulate a workflow behind a single callable with structured I/O
+- **Skills** — encapsulate a workflow behind a single, model-invocable unit with structured I/O. This is no longer a bespoke idea: [Agent Skills](https://agentskills.io) is now an open, cross-vendor standard (published by Anthropic, Dec 2025) built around a `SKILL.md` file — reuse it instead of inventing a one-off convention.
 - **CLI bridges** — let the model issue shell commands through a single `run_cli(command)` tool instead of loading individual tool schemas
 - **Subagents** — offload heavy-tool workflows (Playwright, Figma, large API clients) to a child agent that runs its own context window
 
@@ -142,8 +142,8 @@ Replace clusters of fine-grained tools with **higher-level abstractions**:
 
 **Option A — Skills:**
 1. Identify clusters of 3–5 tools always called together.
-2. Write a skill function that orchestrates them server-side.
-3. Expose the skill as a single MCP tool with a descriptive schema.
+2. Write a `SKILL.md` (frontmatter `description` starting with "Use when…", body under ~500 lines, with when/when-not-to-use sections) per the [Agent Skills](https://agentskills.io) spec, rather than a custom orchestration format.
+3. Point the agent at the skill directory; it's discovered and invoked the same way across supporting tools (Claude, Copilot, Cursor, Gemini CLI, etc.).
 
 **Option B — CLI Bridge:**
 1. Wrap your toolset in a CLI (`my-tool-cli --action list-users --filter active`).
@@ -173,12 +173,12 @@ A single `mcp.json` that loads every registered server means a developer debuggi
 
 ### Solution
 
-Maintain **multiple tool-set configuration files** and select the appropriate one per session or project. The agent only loads tools relevant to the current task scope.
+Maintain **multiple tool-set configuration files** and select the appropriate one per project or task. The agent only loads tools relevant to the current task scope. (Note: as of the MCP 2026-07-28 spec, "session" is no longer a protocol-level concept — this pattern is about client-side/project config scoping, not an MCP session.)
 
 ### How to Implement
 
-1. Create a base `mcp.json` with discovery-only tools (see Pattern 2).
-2. Create scoped config files:
+1. Create a base config with discovery-only tools (see Pattern 2).
+2. Create scoped config files, each a `mcpServers` object of the servers relevant to that scope:
    - `mcp.apim.json` — APIM admin tools
    - `mcp.infra.json` — Docker, SSH, systemd tools
    - `mcp.analytics.json` — metrics, log queries
@@ -186,15 +186,15 @@ Maintain **multiple tool-set configuration files** and select the appropriate on
    ```
    claude --mcp-config mcp.apim.json
    ```
-   Or set via environment variable / project `.claude/` directory.
+   Or set the `mcpServers` object directly in `.claude/settings.json` for the project.
 4. Document which config to use for which project in your team wiki.
 
 **Directory layout:**
 ```
 .claude/
-  mcp.default.json     ← discovery + common utils only
-  mcp.apim.json        ← APIM-scoped tools
-  mcp.acme.json        ← ACME engagement toolset
+  settings.json         ← mcpServers: { ...discovery + common utils only }
+  mcp.apim.json          ← APIM-scoped servers, passed via --mcp-config
+  mcp.analytics.json     ← analytics-scoped servers, passed via --mcp-config
 ```
 
 ### Tradeoffs
@@ -306,6 +306,9 @@ If using a code-mode executor (Pattern 1/2 complement), choose the sandbox caref
 **Prompt Injection via Tool Results**
 Tool results containing attacker-controlled text can hijack routing. Always strip or escape result content before it re-enters the agent loop as context.
 
+**Skill Supply-Chain Risk**
+If you adopt Pattern 4's Skills approach, treat third-party `SKILL.md` bundles as untrusted code, not documentation — a 2026 audit of public skills found prompt injection in roughly a third of them, and skills can bundle executable scripts. Review and pin skills the same way you'd review a dependency.
+
 ---
 
 ## Quick-Reference Checklist
@@ -313,16 +316,19 @@ Tool results containing attacker-controlled text can hijack routing. Always stri
 ```
 [ ] Split large MCP servers into ≤4 semantic units per component
 [ ] Add a ToolSearch/discover_tools gateway; remove upfront manifest injection
-[ ] Back the registry with pgvector + nomic-embed-text (already in stack)
-[ ] Replace fine-grained tool clusters with Skills, CLI bridges, or Subagents
-[ ] Create per-project mcp.*.json files; document which config maps to which engagement
+[ ] Back the registry with a vector store + embedding model (e.g., pgvector + nomic-embed-text)
+[ ] Replace fine-grained tool clusters with Skills (agentskills.io), CLI bridges, or Subagents
+[ ] Create per-project mcp.*.json files; document which config maps to which project
 [ ] Namespace federated tool names; write domain-tagged, router-friendly descriptions
 [ ] Bound and neutralize tool results before they re-enter the loop
 [ ] Gate mutating tools behind propose-before-act approval + endpoint auth
 [ ] Restrict CLI/execute tools to a least-privilege service account
 [ ] Choose quickjs-emscripten over RestrictedPython for any code-mode sandbox
+[ ] Review third-party Skills as untrusted code before adoption (supply-chain risk)
 ```
 
 ---
 
-*Last updated: June 2026*
+**A note on the MCP 2026-07-28 spec:** the finalized spec removed protocol-level sessions (no more `Mcp-Session-Id` or `initialize`/`initialized` handshake — replaced by `_meta` fields and `server/discover`) and deprecated Roots, Sampling, and Logging (still functional for ~12 months, but not recommended for new implementations). None of the context-reduction patterns above depend on those removed/deprecated features, but Pattern 5's "session" terminology refers to a client-side config concept, not an MCP protocol session — see the note in that section.
+
+*Last updated: September 2026*
