@@ -1,3 +1,5 @@
+> THIS REPOSITORY IS NO LONGER MAINTAINED. PLEASE SEE [BechtelPress.com](http://bechtelpress.com).
+
 # ai-best-practices
 
 A collection of field notes and patterns for building with AI agents and tools.
